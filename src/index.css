@@ -193,6 +193,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
 .btn-danger { background: var(--danger); color: #fff; }
 .btn-danger:hover { background: #b91c1c; }
+.btn-danger-outline { background: #fff; border-color: var(--danger-light); color: var(--danger); }
+.btn-danger-outline:hover { background: var(--danger-light); border-color: var(--danger); }
 .btn-sm { padding: 5px 11px; font-size: 12.5px; }
 .btn-lg { padding: 11px 22px; font-size: 15px; }
 .btn-ghost { background: transparent; color: var(--primary); }
@@ -247,6 +249,7 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .badge-blue { background: var(--primary-light); color: var(--primary-dark); }
 .badge-amber { background: var(--warning-light); color: var(--warning); }
 .badge-gray { background: #f1f5f9; color: var(--ink-soft); }
+.badge-yellow { background: var(--warning-light); color: var(--warning); }
 
 /* ---------- Modal ---------- */
 .modal-overlay {

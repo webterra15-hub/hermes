@@ -8,6 +8,7 @@ import Scolarite from './pages/Scolarite';
 import Entrees from './pages/Entrees';
 import Sorties from './pages/Sorties';
 import Balances from './pages/Balances';
+import Reports from './pages/Reports';
 import Eleves from './pages/Eleves';
 import Classes from './pages/Classes';
 import Notes from './pages/Notes';
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/entrees" element={<Protected><Entrees /></Protected>} />
           <Route path="/sorties" element={<Protected><Sorties /></Protected>} />
           <Route path="/balances" element={<Protected><Balances /></Protected>} />
+          <Route path="/rapports" element={<Protected><Reports /></Protected>} />
           <Route path="/eleves" element={<Protected><Eleves /></Protected>} />
           <Route path="/classes" element={<Protected><Classes /></Protected>} />
           <Route path="/notes" element={<Protected><Notes /></Protected>} />

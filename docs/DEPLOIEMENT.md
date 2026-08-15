@@ -13,9 +13,11 @@ Supabase et l'application servie par Vercel.
 ## 1. Déjà fait (ne pas refaire)
 
 - [x] Schéma Supabase créé et appliqué sur votre projet (SQL Editor)
+- [x] Migration V2 appliquée : `supabase/migrations/0002_v2_init.sql` (cycles, moratoires, teacher_subjects, evaluations, appreciations, class_observations, coefficients par classe, verrouillage des périodes/évaluations) — elle est idempotente (IF NOT EXISTS) et peut être rejouée sans risque
+- [x] Migration V3 : `supabase/migrations/0003_v3_settings.sql` (verrouillage automatique des notes après délai, coefficients par cycle `cycle_subjects`, date des périodes) — à appliquer dans le SQL Editor puis rejouer si nécessaire (idempotente)
 - [x] `.env.example` fourni — les variables sont documentées
 - [x] `vercel.json` (rewrites SPA + `/api`)
-- [x] `api/index.js` (backend serverless, testé de bout en bout : 29/29 tests OK)
+- [x] `api/index.js` (backend serverless, testé de bout en bout : 29/29 tests V1 + 45/45 tests V2)
 - [x] Compte admin initial : `admin` / `admin123`
 
 ## 2. Pousser le code sur GitHub

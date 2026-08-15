@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useApp } from '../context';
-import { Modal, Empty, Loading, Field, Badge } from '../components';
+import { Modal, Empty, Loading, Field, Badge, Confirm } from '../components';
 
 export default function Parametres() {
   const { user, school, setSchool, toast, refresh } = useApp();
@@ -23,7 +23,10 @@ export default function Parametres() {
 
   const [periods, setPeriods] = useState([]);
   const [showPeriod, setShowPeriod] = useState(false);
-  const [periodName, setPeriodName] = useState('');
+  const [editPeriod, setEditPeriod] = useState(null);
+  const [periodForm, setPeriodForm] = useState({ name: '', group_name: '', locked: false });
+  const [confirmPeriod, setConfirmPeriod] = useState(null);
+  const [lockDays, setLockDays] = useState(0);
 
   useEffect(() => {
     if (school) setForm({
@@ -35,8 +38,9 @@ export default function Parametres() {
   const loadUsers = async () => { try { setUsers(await api.get('/users')); } catch {} };
   const loadYears = async () => { try { setYears(await api.get('/academic-years')); } catch {} };
   const loadPeriods = async () => { try { setPeriods(await api.get('/periods')); } catch {} };
+  const loadSettings = async () => { try { const s = await api.get('/settings'); setLockDays(s.grade_lock_days || 0); } catch {} };
 
-  useEffect(() => { if (isAdmin) { loadUsers(); loadYears(); loadPeriods(); } }, [isAdmin]);
+  useEffect(() => { if (isAdmin) { loadUsers(); loadYears(); loadPeriods(); loadSettings(); } }, [isAdmin]);
 
   const saveSchool = async (e) => {
     e.preventDefault();
@@ -94,11 +98,32 @@ export default function Parametres() {
 
   const createPeriod = async (e) => {
     e.preventDefault();
-    if (!periodName) return;
+    if (!periodForm.name) return;
     try {
-      await api.post('/periods', { name: periodName, sort_order: periods.length });
-      toast('Période créée');
-      setPeriodName(''); setShowPeriod(false); loadPeriods();
+      if (editPeriod) {
+        await api.put(`/periods/${editPeriod.id}`, { ...periodForm, locked: !!periodForm.locked });
+        toast('Période mise à jour');
+      } else {
+        await api.post('/periods', { name: periodForm.name, group_name: periodForm.group_name || '', sort_order: periods.length });
+        toast('Période créée');
+      }
+      setPeriodForm({ name: '', group_name: '', locked: false });
+      setShowPeriod(false); setEditPeriod(null); loadPeriods();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
+  const doDeletePeriod = async () => {
+    try {
+      await api.del(`/periods/${confirmPeriod.id}`);
+      toast('Période supprimée');
+      setConfirmPeriod(null); loadPeriods();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
+  const saveLockDays = async () => {
+    try {
+      await api.put('/settings', { grade_lock_days: Number(lockDays) || 0 });
+      toast('Délai de verrouillage enregistré');
     } catch (err) { toast(err.message, 'error'); }
   };
 
@@ -206,20 +231,39 @@ export default function Parametres() {
             <div className="card-header between">
               <div>
                 <div className="card-title">Périodes de notes</div>
-                <div className="card-sub">Trimestres ou semestres pour les bulletins</div>
+                <div className="card-sub">Séquences ou trimestres pour les bulletins</div>
               </div>
-              <button className="btn btn-primary btn-sm" onClick={() => setShowPeriod(true)}>+ Période</button>
+              <button className="btn btn-primary btn-sm" onClick={() => { setEditPeriod(null); setPeriodForm({ name: '', group_name: '', locked: false }); setShowPeriod(true); }}>+ Période</button>
             </div>
             <div className="table-wrap">
               <table className="tbl">
-                <thead><tr><th>Période</th><th></th></tr></thead>
+                <thead><tr><th>Période</th><th>Groupe</th><th>Statut</th><th></th></tr></thead>
                 <tbody>
-                  {periods.length === 0 && <tr><td colSpan={2} className="text-center muted">Aucune période — ajoutez par ex. « 1er trimestre »</td></tr>}
+                  {periods.length === 0 && <tr><td colSpan={4} className="text-center muted">Aucune période — ajoutez par ex. « Séquence 1 » rattachée au groupe « T1 »</td></tr>}
                   {periods.map(p => (
-                    <tr key={p.id}><td style={{ fontWeight: 600 }}>{p.name}</td><td /></tr>
+                    <tr key={p.id}>
+                      <td style={{ fontWeight: 600 }}>{p.name}</td>
+                      <td>{p.group_name ? <Badge kind="blue">{p.group_name}</Badge> : <span className="muted">—</span>}</td>
+                      <td>{p.locked ? <Badge kind="red">Verrouillée</Badge> : <Badge kind="green">Ouverte</Badge>}</td>
+                      <td className="actions">
+                        <button className="btn btn-outline btn-sm" onClick={() => { setEditPeriod(p); setPeriodForm({ name: p.name, group_name: p.group_name || '', locked: p.locked }); setShowPeriod(true); }}>Modifier</button>
+                        <button className="btn btn-danger-outline btn-sm" onClick={() => setConfirmPeriod(p)}>Suppr.</button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="card-pad" style={{ borderTop: '1px solid var(--line)', fontSize: 12.5, color: 'var(--muted)' }}>
+              💡 Regroupez les séquences par trimestre : <b>groupe T1</b> = séquences 1 et 2, <b>T2</b> = 3 et 4, <b>T3</b> = séquence 5. Le bulletin de trimestre fait la moyenne des séquences du groupe. Verrouillez une période ou une évaluation pour empêcher la modification des notes.
+            </div>
+            <div className="card-pad" style={{ borderTop: '1px solid var(--line)' }}>
+              <Field label="Verrouillage automatique des notes (jours)" hint="Après ce délai suivant la date de la période/évaluation, les professeurs ne peuvent plus modifier les notes (l'admin peut toujours). 0 = désactivé.">
+                <div className="row" style={{ gap: 10 }}>
+                  <input type="number" min="0" style={{ maxWidth: 120 }} value={lockDays} onChange={(e) => setLockDays(e.target.value)} />
+                  <button className="btn btn-outline btn-sm" onClick={saveLockDays}>Enregistrer</button>
+                </div>
+              </Field>
             </div>
           </div>
         </div>
@@ -280,12 +324,36 @@ export default function Parametres() {
         </form>
       </Modal>
 
-      <Modal open={showPeriod} onClose={() => setShowPeriod(false)} title="Nouvelle période"
-        footer={<button className="btn btn-primary" form="period-form" type="submit">Créer</button>}>
+      <Modal open={showPeriod} onClose={() => { setShowPeriod(false); setEditPeriod(null); }} title={editPeriod ? 'Modifier la période' : 'Nouvelle période'}
+        footer={<button className="btn btn-primary" form="period-form" type="submit">{editPeriod ? 'Enregistrer' : 'Créer'}</button>}>
         <form id="period-form" onSubmit={createPeriod}>
-          <Field label="Nom" hint="Ex : 1er trimestre, 2e trimestre…"><input value={periodName} onChange={(e) => setPeriodName(e.target.value)} placeholder="1er trimestre" autoFocus required /></Field>
+          <Field label="Nom" hint="Ex : Séquence 1, 1er trimestre"><input value={periodForm.name} onChange={(e) => setPeriodForm({ ...periodForm, name: e.target.value })} placeholder="Séquence 1" autoFocus required /></Field>
+          <div className="form-grid">
+            <Field label="Groupe (trimestre)" hint="Ex : T1, T2, T3 — les périodes d'un même groupe forment un trimestre">
+              <select value={periodForm.group_name} onChange={(e) => setPeriodForm({ ...periodForm, group_name: e.target.value })}>
+                <option value="">— Aucun —</option>
+                <option value="T1">T1</option>
+                <option value="T2">T2</option>
+                <option value="T3">T3</option>
+              </select>
+            </Field>
+            <Field label="Verrouillée" hint="Empêche la modification des notes par les professeurs">
+              <label className="row" style={{ gap: 8 }}>
+                <input type="checkbox" checked={periodForm.locked} onChange={(e) => setPeriodForm({ ...periodForm, locked: e.target.checked })} />
+                <span>Verrouiller les notes de cette période</span>
+              </label>
+            </Field>
+          </div>
         </form>
       </Modal>
+
+      <Confirm
+        open={!!confirmPeriod}
+        onCancel={() => setConfirmPeriod(null)}
+        onConfirm={doDeletePeriod}
+        title="Supprimer cette période ?"
+        message={`Voulez-vous supprimer « ${confirmPeriod?.name} » ? Si elle contient des notes ou des évaluations, la suppression sera bloquée et vous devrez la renommer à la place.`}
+      />
     </div>
   );
 }

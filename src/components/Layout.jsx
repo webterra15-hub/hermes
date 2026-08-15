@@ -13,7 +13,8 @@ const NAV = [
       { to: '/scolarite', label: 'Scolarité & Paiements', icon: '🎓' },
       { to: '/entrees', label: 'Entrées', icon: '📥' },
       { to: '/sorties', label: 'Sorties & Dépenses', icon: '📤' },
-      { to: '/balances', label: 'Balances', icon: '⚖️' }
+      { to: '/balances', label: 'Balances', icon: '⚖️' },
+      { to: '/rapports', label: 'Rapports financiers', icon: '📊' }
     ]
   },
   {
@@ -38,6 +39,7 @@ const TITLES = {
   '/entrees': 'Entrées d\'argent',
   '/sorties': 'Sorties & Dépenses',
   '/balances': 'Balances financières',
+  '/rapports': 'Rapports financiers',
   '/eleves': 'Élèves & Inscriptions',
   '/classes': 'Classes & Niveaux',
   '/notes': 'Notes & Bulletins',

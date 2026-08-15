@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, fmt } from '../api';
 import { useApp } from '../context';
-import { Modal, Empty, Loading, Field, Badge } from '../components';
+import { Modal, Empty, Loading, Field, Badge, Confirm } from '../components';
 
 const EMPTY = {
   first_name: '', last_name: '', gender: 'M', birth_date: '', birth_place: '',
@@ -27,6 +27,8 @@ export default function Eleves() {
   const [reenrollTarget, setReenrollTarget] = useState(null);
   const [editing, setEditing] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
+  const [confirmArchive, setConfirmArchive] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -95,6 +97,28 @@ export default function Eleves() {
     } catch (err) { toast(err.message, 'error'); }
   };
 
+  const doArchive = async () => {
+    setBusy(true);
+    try {
+      await api.post(`/students/${confirmTarget.id}/archive`, { archived: !confirmArchive });
+      toast(confirmArchive ? 'Élève restauré' : 'Élève archivé');
+      setConfirmTarget(null); load();
+    } catch (err) { toast(err.message, 'error'); } finally { setBusy(false); }
+  };
+
+  const doDelete = async () => {
+    setBusy(true);
+    try {
+      await api.del(`/students/${confirmTarget.id}`);
+      toast('Élève supprimé');
+      setConfirmTarget(null); load();
+    } catch (err) {
+      if (err.message.includes('409') || (confirmTarget && err.message.includes('archiv'))) {
+        toast('Cet élève a des données liées — archivez-le à la place.', 'error');
+      } else toast(err.message, 'error');
+    } finally { setBusy(false); }
+  };
+
   const activeCount = students.filter(s => s.enrollment_id).length;
   const formerCount = students.filter(s => !s.enrollment_id).length;
 
@@ -159,6 +183,12 @@ export default function Eleves() {
                   {tab === 'inscrits' && <td className="num">{fmt(s.paid || 0, curr)}</td>}
                   <td className="actions">
                     <button className="btn btn-outline btn-sm" onClick={() => openEdit(s)}>Dossier</button>
+                    {canWrite && tab === 'inscrits' && (
+                      <>
+                        <button className="btn btn-outline btn-sm" onClick={() => { setConfirmTarget(s); setConfirmArchive(s.archived ? false : true); }}>{s.archived ? 'Restaurer' : 'Archiver'}</button>
+                        <button className="btn btn-danger-outline btn-sm" onClick={() => { setConfirmTarget(s); setConfirmArchive(null); }}>Supprimer</button>
+                      </>
+                    )}
                     {tab === 'anciens' && canWrite && (
                       <button className="btn btn-secondary btn-sm" onClick={() => { setForm({ ...EMPTY, first_name: s.first_name, last_name: s.last_name, parent_name: s.parent_name }); setFormClass(''); setReenrollTarget(s); setIsReenroll(true); setShowReenroll(true); }}>Réinscrire</button>
                     )}
@@ -255,6 +285,20 @@ export default function Eleves() {
           </form>
         )}
       </Modal>
+      <Confirm
+        open={!!confirmTarget}
+        onCancel={() => setConfirmTarget(null)}
+        onConfirm={confirmArchive === null ? doDelete : doArchive}
+        title={confirmArchive === null ? 'Supprimer cet élève ?' : (confirmArchive ? 'Restaurer cet élève ?' : 'Archiver cet élève ?')}
+        message={confirmArchive === null
+          ? `Voulez-vous supprimer définitivement ${confirmTarget?.first_name} ${confirmTarget?.last_name} ? Si l'élève a des données liées (paiements, notes), la suppression sera bloquée et vous devrez l'archiver.`
+          : (confirmArchive
+            ? `Voulez-vous restaurer ${confirmTarget?.first_name} ${confirmTarget?.last_name} ?`
+            : `Voulez-vous archiver ${confirmTarget?.first_name} ${confirmTarget?.last_name} ? L'élève restera dans les archives.`)}
+        confirmLabel={confirmArchive === null ? 'Supprimer' : (confirmArchive ? 'Restaurer' : 'Archiver')}
+        danger={confirmArchive === null}
+        loading={busy}
+      />
     </div>
   );
 }

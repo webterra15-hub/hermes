@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, fmt, fmtDate } from '../api';
 import { useApp } from '../context';
-import { Modal, Badge, Empty, Loading } from '../components';
+import { Modal, Badge, Empty, Loading, Field, Confirm } from '../components';
 import ReceiptView from '../components/ReceiptView';
+import CertificateView from '../components/CertificateView';
 
 export default function Scolarite() {
   const { user, school, toast } = useApp();
@@ -12,6 +13,7 @@ export default function Scolarite() {
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [moratoires, setMoratoires] = useState([]);
   const [loading, setLoading] = useState(true);
   const [classFilter, setClassFilter] = useState('');
   const [search, setSearch] = useState('');
@@ -20,20 +22,28 @@ export default function Scolarite() {
   const [payStudent, setPayStudent] = useState(null);
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
+  const [payCategory, setPayCategory] = useState('scolarite');
   const [paying, setPaying] = useState(false);
   const [receipt, setReceipt] = useState(null);
+  const [certStudent, setCertStudent] = useState(null);
+
+  const [showMora, setShowMora] = useState(false);
+  const [moraForm, setMoraForm] = useState({ enrollment_id: '', reason: '', end_date: '', note: '' });
+  const [deleteMora, setDeleteMora] = useState(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [st, cl, py] = await Promise.all([
+      const [st, cl, py, mo] = await Promise.all([
         api.get(`/students?class_id=${classFilter || ''}`),
         api.get('/classes'),
-        api.get(`/payments${classFilter ? `?class_id=${classFilter}` : ''}`)
+        api.get(`/payments${classFilter ? `?class_id=${classFilter}` : ''}`),
+        api.get(`/moratoires${classFilter ? `?class_id=${classFilter}` : ''}`)
       ]);
       setStudents(st);
       setClasses(cl);
       setPayments(py);
+      setMoratoires(mo);
     } finally { setLoading(false); }
   };
 
@@ -49,17 +59,36 @@ export default function Scolarite() {
     if (!amt || amt <= 0) return toast('Montant invalide', 'error');
     setPaying(true);
     try {
-      const res = await api.post('/payments', { enrollment_id: payStudent.enrollment_id, amount: amt, note: payNote });
+      const res = await api.post('/payments', { enrollment_id: payStudent.enrollment_id, amount: amt, note: payNote, category: payCategory });
       setReceipt(res.payment);
       toast(`Paiement enregistré — ${res.payment.receipt_number}`);
-      setPayAmount(''); setPayNote('');
+      setPayAmount(''); setPayNote(''); setPayCategory('scolarite');
       load();
     } catch (err) {
       toast(err.message, 'error');
     } finally { setPaying(false); }
   };
 
-  const openPay = (s) => { setPayStudent(s); setPayAmount(''); setPayNote(''); };
+  const openPay = (s) => { setPayStudent(s); setPayAmount(''); setPayNote(''); setPayCategory('scolarite'); };
+
+  const createMora = async (e) => {
+    e.preventDefault();
+    if (!moraForm.enrollment_id || !moraForm.reason) return toast('Élève et motif requis', 'error');
+    try {
+      await api.post('/moratoires', { ...moraForm, end_date: moraForm.end_date || null });
+      toast('Moratoire créé');
+      setShowMora(false); setMoraForm({ enrollment_id: '', reason: '', end_date: '', note: '' });
+      load();
+    } catch (err) { toast(err.message, 'error'); }
+  };
+
+  const deleteMoraDo = async () => {
+    try {
+      await api.del(`/moratoires/${deleteMora.id}`);
+      toast('Moratoire supprimé');
+      setDeleteMora(null); load();
+    } catch (err) { toast(err.message, 'error'); }
+  };
 
   return (
     <div>
@@ -73,6 +102,7 @@ export default function Scolarite() {
       <div className="tabs">
         <button className={`tab ${tab === 'paiements' ? 'active' : ''}`} onClick={() => setTab('paiements')}>Paiements enregistrés</button>
         <button className={`tab ${tab === 'eleves' ? 'active' : ''}`} onClick={() => setTab('eleves')}>Élèves & soldes</button>
+        <button className={`tab ${tab === 'moratoires' ? 'active' : ''}`} onClick={() => setTab('moratoires')}>Moratoires</button>
       </div>
 
       {tab === 'paiements' ? (
@@ -110,7 +140,7 @@ export default function Scolarite() {
             </table>
           </div>
         </div>
-      ) : (
+      ) : tab === 'eleves' ? (
         <div className="card">
           <div className="card-header">
             <div className="field" style={{ margin: 0, minWidth: 260 }}>
@@ -140,10 +170,48 @@ export default function Scolarite() {
                       <td><Badge kind={balance <= 0 ? 'green' : 'amber'}>{balance <= 0 ? 'Soldé' : 'Partiel'}</Badge></td>
                       <td className="actions">
                         {canWrite && <button className="btn btn-secondary btn-sm" onClick={() => openPay(s)}>Payer</button>}
+                        <button className="btn btn-outline btn-sm" onClick={() => setCertStudent(s)}>Certificat</button>
                       </td>
                     </tr>
                   );
                 })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="card">
+          <div className="card-header between">
+            <div className="row">
+              <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)} style={{ padding: '8px 10px', border: '1px solid var(--line)', borderRadius: 8 }}>
+                <option value="">Toutes les classes</option>
+                {classes.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            {canWrite && <button className="btn btn-primary btn-sm" onClick={() => setShowMora(true)}>+ Moratoire</button>}
+          </div>
+          <div className="table-wrap">
+            <table className="tbl">
+              <thead>
+                <tr><th>Élève</th><th>Classe</th><th>Motif</th><th>Début</th><th>Fin</th><th>Note</th><th>Créé par</th><th></th></tr>
+              </thead>
+              <tbody>
+                {loading && <tr><td colSpan={8}><Loading /></td></tr>}
+                {!loading && moratoires.length === 0 && <tr><td colSpan={8}><Empty message="Aucun moratoire — un moratoire permet de reporter une échéance de paiement de scolarité." /></td></tr>}
+                {moratoires.map(m => (
+                  <tr key={m.id}>
+                    <td style={{ fontWeight: 600 }}>{m.first_name} {m.last_name}</td>
+                    <td>{m.class_name}</td>
+                    <td>{m.reason}</td>
+                    <td>{fmtDate(m.start_date)}</td>
+                    <td>{m.end_date ? fmtDate(m.end_date) : '—'}</td>
+                    <td className="muted">{m.note || '—'}</td>
+                    <td>{m.created_by_name || '—'}</td>
+                    <td className="actions">
+                      {canWrite && <button className="btn btn-danger-outline btn-sm" onClick={() => setDeleteMora(m)}>Suppr.</button>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -170,6 +238,15 @@ export default function Scolarite() {
               <input type="number" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder={`Ex : 25000 ${curr}`} autoFocus required />
             </div>
             <div className="field">
+              <label>Catégorie de frais</label>
+              <select value={payCategory} onChange={(e) => setPayCategory(e.target.value)}>
+                <option value="scolarite">Scolarité</option>
+                <option value="inscription">Inscription</option>
+                <option value="transport">Transport</option>
+                <option value="autres">Autres</option>
+              </select>
+            </div>
+            <div className="field">
               <label>Note (optionnel)</label>
               <input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="Ex : paiement 2e tranche" />
             </div>
@@ -180,7 +257,34 @@ export default function Scolarite() {
         )}
       </Modal>
 
+      <Modal open={showMora} onClose={() => setShowMora(false)} title="Nouveau moratoire"
+        footer={<button className="btn btn-primary" form="mora-form" type="submit">Créer</button>}>
+        <form id="mora-form" onSubmit={createMora}>
+          <Field label="Élève">
+            <select value={moraForm.enrollment_id} onChange={(e) => setMoraForm({ ...moraForm, enrollment_id: e.target.value })} required>
+              <option value="">— Choisir —</option>
+              {students.filter(s => s.enrollment_id).map(s => (
+                <option key={s.enrollment_id} value={s.enrollment_id}>{s.first_name} {s.last_name} — {s.class_name}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Motif"><input value={moraForm.reason} onChange={(e) => setMoraForm({ ...moraForm, reason: e.target.value })} placeholder="Ex : difficultés financières" required /></Field>
+          <div className="form-grid">
+            <Field label="Date de fin (optionnel)"><input type="date" value={moraForm.end_date} onChange={(e) => setMoraForm({ ...moraForm, end_date: e.target.value })} /></Field>
+            <Field label="Note (optionnel)"><input value={moraForm.note} onChange={(e) => setMoraForm({ ...moraForm, note: e.target.value })} /></Field>
+          </div>
+        </form>
+      </Modal>
+
       <ReceiptView receipt={receipt} onClose={() => setReceipt(null)} />
+      <CertificateView student={certStudent} onClose={() => setCertStudent(null)} />
+      <Confirm
+        open={!!deleteMora}
+        onCancel={() => setDeleteMora(null)}
+        onConfirm={deleteMoraDo}
+        title="Supprimer ce moratoire ?"
+        message={`Voulez-vous supprimer le moratoire de ${deleteMora?.first_name} ${deleteMora?.last_name} ?`}
+      />
     </div>
   );
 }
